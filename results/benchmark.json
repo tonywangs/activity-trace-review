@@ -1,0 +1,51 @@
+{
+  "python": "3.12.3",
+  "platform": "Linux-6.8.0-124-generic-x86_64-with-glibc2.39",
+  "Pillow": "11.3.0",
+  "measurement": "perf_counter wall time; Linux ru_maxrss KiB, cumulative for benchmark process; one repetition per workload",
+  "baseline_scope": "PNG encoding only; excludes validation, selection, metadata, ZIP. Not a comparable end-to-end baseline.",
+  "workloads": [
+    {
+      "seed": 1307,
+      "actions": 128,
+      "images": 64,
+      "dimensions": [
+        512,
+        512
+      ],
+      "decoded_pixels": 16777216,
+      "input_bytes": 196924,
+      "load_seconds": 0.305557,
+      "encode_only_unmasked_baseline_seconds": 1.027114,
+      "encode_only_unmasked_baseline_bytes": 145084,
+      "export_and_zip_seconds": 1.127925,
+      "replay_seconds": 1.126984,
+      "bundle_bytes": 171368,
+      "archive_bytes": 178116,
+      "archive_sha256": "4006a79b15ac629f3c0c00937ebd27d031d3f5148872eea93d127784542d9d82",
+      "deterministic_replay": true,
+      "peak_process_rss_kib_cumulative": 159864
+    },
+    {
+      "seed": 1307,
+      "actions": 128,
+      "images": 4,
+      "dimensions": [
+        2048,
+        2048
+      ],
+      "decoded_pixels": 16777216,
+      "input_bytes": 91965,
+      "load_seconds": 0.29648,
+      "encode_only_unmasked_baseline_seconds": 0.697374,
+      "encode_only_unmasked_baseline_bytes": 70857,
+      "export_and_zip_seconds": 0.753025,
+      "replay_seconds": 0.858138,
+      "bundle_bytes": 90267,
+      "archive_bytes": 90895,
+      "archive_sha256": "ad04914b0f963a38fe55b259922ef44231cfa0a8dcfde5c48805bfae0568766d",
+      "deterministic_replay": true,
+      "peak_process_rss_kib_cumulative": 174872
+    }
+  ]
+}

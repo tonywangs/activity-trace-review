@@ -1,0 +1,32 @@
+$ python -m unittest discover -s tests -v
+test_cleanup_cancellation_and_serialization_failure (test_core.CoreTests.test_cleanup_cancellation_and_serialization_failure) ... ok
+test_demo_export_reopen_and_replay (test_core.CoreTests.test_demo_export_reopen_and_replay) ... ok
+test_explicit_review_gates_and_empty_selection (test_core.CoreTests.test_explicit_review_gates_and_empty_selection) ... ok
+test_imported_manifest_structure_and_version (test_core.CoreTests.test_imported_manifest_structure_and_version) ... ok
+test_malformed_images_and_limits (test_core.CoreTests.test_malformed_images_and_limits) ... ok
+test_path_symlink_fifo_and_output_collision (test_core.CoreTests.test_path_symlink_fifo_and_output_collision) ... ok
+test_review_schema_errors_preserve_current (test_core.CoreTests.test_review_schema_errors_preserve_current) ... ok
+test_source_binding_raw_bytes_and_images (test_core.CoreTests.test_source_binding_raw_bytes_and_images) ... ok
+test_trace_and_json_errors (test_core.CoreTests.test_trace_and_json_errors) ... ok
+test_validator_rejects_tampering_and_extra_artifacts (test_core.CoreTests.test_validator_rejects_tampering_and_extra_artifacts) ... ok
+test_240_seeded_cases (test_core.SeededIndependentOracle.test_240_seeded_cases)
+Expected selection and pixels computed directly, without export helpers. ... ok
+test_non_ascii_auth_rejected_without_state_change (test_server.ServerTransactions.test_non_ascii_auth_rejected_without_state_change) ... ok
+test_response_serialization_failure_preserves_source_and_review (test_server.ServerTransactions.test_response_serialization_failure_preserves_source_and_review) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 7.206s
+
+OK
+
+$ python tests/browser_flow.py
+{"browser_errors": [], "canvas_elements": 1, "chromium": "140.0.7339.16", "deterministic_replay": true, "dom_elements": 144, "elapsed_seconds": 10.208, "export_bundle_bytes": 5549, "export_zip_bytes": 5973, "external_request_policy": "abort non-loopback-workbench requests", "external_requests_attempted": 0, "maximum_workload_dom_elements": 602, "maximum_workload_timeline_buttons": 128, "server_peak_rss_kib": 96672, "timeline_buttons": 12, "workflow": "import, navigation, keyboard editing, segments, removal, text, drag masks, shared review, save/reload, invalid imports, cancellation, export, independent pixel validation, reopen"}
+
+$ python scripts/installed_example.py
+{"actions": 12, "bundle_bytes": 11560, "collision_rejected": true, "deterministic_replay": true, "images": 4, "isolated_install": true, "network_connect_denied": true, "package_wheel_bytes": 22579, "source_hashes_unchanged": true, "source_tree_on_import_path": false, "unreviewed_export_rejected": true}
+
+$ python scripts/benchmark.py
+{"Pillow": "11.3.0", "baseline_scope": "PNG encoding only; excludes validation, selection, metadata, ZIP. Not a comparable end-to-end baseline.", "measurement": "perf_counter wall time; Linux ru_maxrss KiB, cumulative for benchmark process; one repetition per workload", "platform": "Linux-6.8.0-124-generic-x86_64-with-glibc2.39", "python": "3.12.3", "workloads": [{"actions": 128, "archive_bytes": 178116, "archive_sha256": "4006a79b15ac629f3c0c00937ebd27d031d3f5148872eea93d127784542d9d82", "bundle_bytes": 171368, "decoded_pixels": 16777216, "deterministic_replay": true, "dimensions": [512, 512], "encode_only_unmasked_baseline_bytes": 145084, "encode_only_unmasked_baseline_seconds": 1.027114, "export_and_zip_seconds": 1.127925, "images": 64, "input_bytes": 196924, "load_seconds": 0.305557, "peak_process_rss_kib_cumulative": 159864, "replay_seconds": 1.126984, "seed": 1307}, {"actions": 128, "archive_bytes": 90895, "archive_sha256": "ad04914b0f963a38fe55b259922ef44231cfa0a8dcfde5c48805bfae0568766d", "bundle_bytes": 90267, "decoded_pixels": 16777216, "deterministic_replay": true, "dimensions": [2048, 2048], "encode_only_unmasked_baseline_bytes": 70857, "encode_only_unmasked_baseline_seconds": 0.697374, "export_and_zip_seconds": 0.753025, "images": 4, "input_bytes": 91965, "load_seconds": 0.29648, "peak_process_rss_kib_cumulative": 174872, "replay_seconds": 0.858138, "seed": 1307}]}
+
+$ python scripts/publication_check.py
+{"bytes": 310112, "file_limit": 1000, "files": 31, "individual_byte_limit": 10485760, "largest_file_bytes": 177047, "tree_byte_limit": 33554432}

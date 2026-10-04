@@ -1,0 +1,71 @@
+{
+  "passed": true,
+  "elapsed_seconds": 33.196,
+  "python": "3.12.3",
+  "platform": "Linux-6.8.0-124-generic-x86_64-with-glibc2.39",
+  "dependencies": {
+    "Pillow": "11.3.0",
+    "playwright": "1.55.0",
+    "build": "1.3.0",
+    "setuptools": "80.9.0",
+    "wheel": "0.45.1"
+  },
+  "rss_scope": "GNU time maximum resident set for each command (largest process, not sum of process tree); KiB on Linux",
+  "seeded_export_cases": 240,
+  "seed_range": [
+    0,
+    239
+  ],
+  "checks": [
+    {
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-v"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 7.52,
+      "peak_process_rss_kib": 39236
+    },
+    {
+      "command": [
+        "python",
+        "tests/browser_flow.py"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 10.68,
+      "peak_process_rss_kib": 104152
+    },
+    {
+      "command": [
+        "python",
+        "scripts/installed_example.py"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 5.56,
+      "peak_process_rss_kib": 52348
+    },
+    {
+      "command": [
+        "python",
+        "scripts/benchmark.py"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 8.4,
+      "peak_process_rss_kib": 174872
+    },
+    {
+      "command": [
+        "python",
+        "scripts/publication_check.py"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 0.98,
+      "peak_process_rss_kib": 12032
+    }
+  ]
+}
