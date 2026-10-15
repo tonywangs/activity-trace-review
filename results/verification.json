@@ -1,6 +1,6 @@
 {
   "passed": true,
-  "elapsed_seconds": 33.196,
+  "elapsed_seconds": 53.443,
   "python": "3.12.3",
   "platform": "Linux-6.8.0-124-generic-x86_64-with-glibc2.39",
   "dependencies": {
@@ -28,8 +28,8 @@
         "-v"
       ],
       "exit_code": 0,
-      "elapsed_seconds": 7.52,
-      "peak_process_rss_kib": 39236
+      "elapsed_seconds": 22.96,
+      "peak_process_rss_kib": 42624
     },
     {
       "command": [
@@ -37,8 +37,8 @@
         "tests/browser_flow.py"
       ],
       "exit_code": 0,
-      "elapsed_seconds": 10.68,
-      "peak_process_rss_kib": 104152
+      "elapsed_seconds": 11.88,
+      "peak_process_rss_kib": 105060
     },
     {
       "command": [
@@ -46,8 +46,8 @@
         "scripts/installed_example.py"
       ],
       "exit_code": 0,
-      "elapsed_seconds": 5.56,
-      "peak_process_rss_kib": 52348
+      "elapsed_seconds": 7.16,
+      "peak_process_rss_kib": 52476
     },
     {
       "command": [
@@ -55,8 +55,8 @@
         "scripts/benchmark.py"
       ],
       "exit_code": 0,
-      "elapsed_seconds": 8.4,
-      "peak_process_rss_kib": 174872
+      "elapsed_seconds": 10.4,
+      "peak_process_rss_kib": 175244
     },
     {
       "command": [
@@ -64,7 +64,7 @@
         "scripts/publication_check.py"
       ],
       "exit_code": 0,
-      "elapsed_seconds": 0.98,
+      "elapsed_seconds": 1.0,
       "peak_process_rss_kib": 12032
     }
   ]

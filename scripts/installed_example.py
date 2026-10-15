@@ -6,6 +6,7 @@ No package indexes or downloads are used by this script.
 import hashlib
 import json
 import os
+import signal
 from pathlib import Path
 import subprocess
 import sys
@@ -18,6 +19,7 @@ def run(args,**kwargs):
     return result.stdout
 
 def main():
+    os.environ.pop('PYTHONPATH',None)
     wheelhouse=Path(os.environ.get('TRACE_WHEELHOUSE','/tmp/activity-trace-wheelhouse'))
     assert list(wheelhouse.glob('pillow-11.3.0-*.whl')),'Preload the Pillow wheel as documented in README.md'
     with tempfile.TemporaryDirectory() as tmp:
@@ -44,17 +46,39 @@ def main():
         failed=subprocess.run([str(cli),'export',str(source),str(tmp/'new-review.json'),str(tmp/'should-not-exist')],cwd=tmp,env=clean,capture_output=True)
         assert failed.returncode==2 and not (tmp/'should-not-exist').exists()
         run([cli,'export',source,demo/'example-review.json',tmp/'bundle'],cwd=tmp,env=clean)
-        validated=json.loads(run([cli,'validate',tmp/'bundle'],cwd=tmp,env=clean));assert validated['actions']==12
+        validated=json.loads(run([cli,'verify',tmp/'bundle'],cwd=tmp,env=clean));assert validated['actions']==12
         reopened=json.loads(run([cli,'inspect',tmp/'bundle'],cwd=tmp,env=clean));assert reopened['actions']==12
         run([cli,'export',source,demo/'example-review.json',tmp/'replay'],cwd=tmp,env=clean)
         first={p.name:p.read_bytes() for p in (tmp/'bundle').iterdir()};second={p.name:p.read_bytes() for p in (tmp/'replay').iterdir()};assert first==second
         collision=subprocess.run([str(cli),'export',str(source),str(demo/'example-review.json'),str(tmp/'bundle')],cwd=tmp,env=clean,capture_output=True)
         assert collision.returncode==2
         assert first=={p.name:p.read_bytes() for p in (tmp/'bundle').iterdir()}
+        # Interrupt the actual installed publisher after staged files are fsynced.
+        interrupted=tmp/'interrupted'
+        child = ('import os,signal,sys;from activity_trace_review.core import *;'
+                 'from activity_trace_review.transaction import publish_bundle;'
+                 'source=read_directory(sys.argv[1]);review=loads(open(sys.argv[2],"rb").read());'
+                 'publish_bundle(build_bundle(source,review),sys.argv[3],Budget(),'
+                 'hook=lambda stage,path:os.kill(os.getpid(),signal.SIGKILL) if stage=="files_synced" else None)')
+        killed=subprocess.run([str(python),'-I','-c',child,str(source),str(demo/'example-review.json'),str(interrupted)],
+                              cwd=tmp,env=clean,capture_output=True,text=True,timeout=15)
+        assert killed.returncode==-signal.SIGKILL and not interrupted.exists(),killed.stderr
+        stages=list(tmp.glob('.trace-stage-*'));assert len(stages)==1
+        for candidate in (stages[0],stages[0]/'payload'):
+            rejected=subprocess.run([str(cli),'verify',str(candidate)],cwd=tmp,env=clean,capture_output=True,text=True)
+            assert rejected.returncode==2 and 'staging' in rejected.stderr.lower()
+        for path in stages[0].rglob('*'):
+            if path.is_file():assert b'SYNTHETIC_SECRET' not in path.read_bytes()
+        run([cli,'export',source,demo/'example-review.json',interrupted],cwd=tmp,env=clean)
+        assert json.loads(run([cli,'verify',interrupted],cwd=tmp,env=clean))==validated
+        assert json.loads(run([cli,'inspect',interrupted],cwd=tmp,env=clean))['actions']==12
+        for directory in (tmp/'bundle',tmp/'replay',interrupted):
+            for path in directory.iterdir():assert b'SYNTHETIC_SECRET' not in path.read_bytes()
         assert before=={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in source.iterdir()}
         report={'isolated_install':True,'source_tree_on_import_path':False,'network_connect_denied':True,'package_wheel_bytes':wheel.stat().st_size,
                 'actions':validated['actions'],'images':validated['images'],'bundle_bytes':validated['bytes'],
-                'source_hashes_unchanged':True,'deterministic_replay':True,'unreviewed_export_rejected':True,'collision_rejected':True}
+                'source_hashes_unchanged':True,'deterministic_replay':True,'unreviewed_export_rejected':True,'collision_rejected':True,'sigkill_recovery':True,'staging_verification_rejected':True,
+                'input_sha256':before,'bundle_sha256':{k:hashlib.sha256(v).hexdigest() for k,v in first.items()}}
         (ROOT/'results/installed.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report,sort_keys=True))
 
 if __name__=='__main__':main()

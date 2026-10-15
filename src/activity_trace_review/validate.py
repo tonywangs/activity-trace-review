@@ -11,19 +11,27 @@ import stat
 from pathlib import Path
 import re
 import struct
+import zlib
 from PIL import Image
 
 class BundleError(ValueError):
     pass
 
-def validate_bundle(path):
+def validate_bundle(path, *, _staged=False):
     path = Path(path)
     if path.is_symlink() or not path.is_dir():
         raise BundleError('Bundle must be a real directory')
-    entries = list(path.iterdir())
+    if not _staged and any(part.startswith(".trace-stage-") for part in (*path.absolute().parts, *path.resolve().parts)):
+        raise BundleError("Incomplete staging is not a published bundle")
+    entries = []
+    for entry in path.iterdir():
+        entries.append(entry)
+        if len(entries) > 66:
+            raise BundleError("Too many bundle entries")
     if len(entries) > 66 or any(p.is_symlink() or not p.is_file() for p in entries):
         raise BundleError('Invalid bundle entries')
     files = {}
+    total = 0
     for p in entries:
         fd=os.open(p,os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         with os.fdopen(fd,'rb') as f:
@@ -32,13 +40,16 @@ def validate_bundle(path):
             data=f.read(8*1024*1024+1)
         if len(data)>8*1024*1024:
             raise BundleError('Oversize file')
+        total += len(data)
+        if total > 32*1024*1024:
+            raise BundleError('Oversize bundle')
         files[p.name]=data
-    if sum(map(len, files.values())) > 32*1024*1024:
-        raise BundleError('Oversize bundle')
     return validate_files(files)
 
 def validate_files(files):
-    if type(files) is not dict or len(files) > 66 or sum(map(len,files.values())) > 32*1024*1024:
+    if (type(files) is not dict or len(files) > 66
+            or any(type(k) is not str or type(v) is not bytes or len(v)>8*1024*1024 for k,v in files.items())
+            or sum(map(len,files.values())) > 32*1024*1024):
         raise BundleError('Invalid bundle size')
     def parse(name):
         def obj(pairs):
@@ -50,7 +61,8 @@ def validate_files(files):
             return out
         if len(files[name]) > 512*1024:
             raise BundleError('Oversize JSON')
-        return json.loads(files[name], object_pairs_hook=obj)
+        return json.loads(files[name], object_pairs_hook=obj,
+                          parse_constant=lambda _: (_ for _ in ()).throw(BundleError('Non-finite JSON')))
     try:
         manifest, trace = parse('manifest.json'), parse('trace.json')
         if type(manifest) is not dict or set(manifest) != {'format','actions','images','files'} or manifest['format'] != 'activity-bundle/1' or type(manifest['files']) is not dict:
@@ -60,14 +72,14 @@ def validate_files(files):
         for name, record in manifest['files'].items():
             if type(record) is not dict or type(record.get('bytes')) is not int or record != {'bytes':len(files[name]), 'sha256':hashlib.sha256(files[name]).hexdigest()}:
                 raise BundleError('Digest or size mismatch')
-        if set(trace) != {'format','synthetic','actions'} or trace['format'] != 'activity-trace/1' or type(trace['synthetic']) is not bool:
+        if type(trace) is not dict or set(trace) != {'format','synthetic','actions'} or trace['format'] != 'activity-trace/1' or type(trace['synthetic']) is not bool:
             raise BundleError('Invalid trace header')
         actions = trace['actions']
         if type(actions) is not list or not 1 <= len(actions) <= 128 or type(manifest['actions']) is not int or len(actions) != manifest['actions']:
             raise BundleError('Invalid action count')
         previous, names = -1, []
         for i, a in enumerate(actions):
-            if set(a) != {'id','timestamp_ms','kind','text','screenshot'} or a['id'] != f'action{i+1:04d}':
+            if type(a) is not dict or set(a) != {'id','timestamp_ms','kind','text','screenshot'} or a['id'] != f'action{i+1:04d}':
                 raise BundleError('Invalid action')
             if type(a['timestamp_ms']) is not int or not previous <= a['timestamp_ms'] <= 2**53-1 or a['timestamp_ms'] < 0:
                 raise BundleError('Invalid timestamp')
@@ -96,18 +108,27 @@ def validate_files(files):
                 chunk = data[pos+4:pos+8]
                 if chunk not in (b'IHDR',b'IDAT',b'IEND') or pos+12+size>len(data):
                     raise BundleError('Metadata or invalid PNG chunk')
+                if zlib.crc32(data[pos+4:pos+8+size]) != struct.unpack('>I',data[pos+8+size:pos+12+size])[0]:
+                    raise BundleError('PNG CRC mismatch')
+                if (chunk == b'IHDR' and size != 13) or (chunk == b'IEND' and size != 0):
+                    raise BundleError('Invalid PNG chunk size')
                 chunks.append(chunk)
                 pos += 12+size
             if (pos != len(data) or len(chunks)<3 or chunks[0] != b'IHDR' or chunks[-1] != b'IEND'
                     or any(chunk != b'IDAT' for chunk in chunks[1:-1]) or data[24:26] != b'\x08\x02'):
                 raise BundleError('Invalid PNG layout')
             with Image.open(io.BytesIO(data)) as im:
-                if im.mode != 'RGB' or im.width>2048 or im.height>2048 or im.width*im.height>4194304:
+                if im.mode != 'RGB' or not 0<im.width<=2048 or not 0<im.height<=2048 or im.width*im.height>4194304:
                     raise BundleError('Invalid image dimensions or mode')
                 pixels += im.width*im.height
                 if pixels>16777216:
                     raise BundleError('Decoded pixel limit')
                 im.verify()
+            # verify() checks container checksums but does not decompress IDAT.
+            with Image.open(io.BytesIO(data)) as im:
+                im.load()
         return {'actions':len(actions),'images':len(names),'bytes':sum(map(len,files.values()))}
-    except (KeyError, TypeError, IndexError, struct.error, json.JSONDecodeError) as e:
+    except BundleError:
+        raise
+    except (KeyError, TypeError, IndexError, struct.error, json.JSONDecodeError, UnicodeError, RecursionError, OSError, SyntaxError, ValueError) as e:
         raise BundleError('Malformed bundle') from e

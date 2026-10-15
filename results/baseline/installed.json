@@ -1,0 +1,13 @@
+{
+  "isolated_install": true,
+  "source_tree_on_import_path": false,
+  "network_connect_denied": true,
+  "package_wheel_bytes": 22579,
+  "actions": 12,
+  "images": 4,
+  "bundle_bytes": 11560,
+  "source_hashes_unchanged": true,
+  "deterministic_replay": true,
+  "unreviewed_export_rejected": true,
+  "collision_rejected": true
+}

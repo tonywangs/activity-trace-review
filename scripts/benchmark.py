@@ -12,6 +12,8 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tests'))
 from workloads import workload
 from activity_trace_review.core import load_files, new_review, build_bundle, bundle_zip, rgb_png, write_fresh
+from activity_trace_review.transaction import publish_bundle
+from activity_trace_review.core import Budget, dumps
 from activity_trace_review.runtime import deadline
 from activity_trace_review.validate import validate_bundle
 
@@ -30,7 +32,20 @@ def run(images,dimension):
     with deadline():exported=build_bundle(source,review);archive=bundle_zip(exported)
     export_seconds=time.perf_counter()-start
     with tempfile.TemporaryDirectory() as tmp:
-        dest=Path(tmp)/'bundle';write_fresh(exported,dest);result=validate_bundle(dest)
+        dest=Path(tmp)/'bundle'
+        staged_logical=[];staged_allocated=[];total_logical=[];total_allocated=[]
+        def usage(stage,path):
+            staged=[p for p in path.rglob('*') if p.is_file()]
+            total=[p for p in Path(tmp).rglob('*') if p.is_file()]
+            staged_logical.append(sum(p.stat().st_size for p in staged))
+            staged_allocated.append(sum(p.stat().st_blocks*512 for p in staged))
+            total_logical.append(sum(p.stat().st_size for p in total))
+            total_allocated.append(sum(p.stat().st_blocks*512 for p in total))
+        publish_start=time.perf_counter()
+        publish_bundle(exported,dest,Budget(),hook=usage)
+        publication_seconds=time.perf_counter()-publish_start
+        result=validate_bundle(dest)
+        directory_hash=hashlib.sha256(dumps({p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in dest.iterdir()})).hexdigest()
     start=time.perf_counter()
     with deadline():second=bundle_zip(build_bundle(source,review))
     replay_seconds=time.perf_counter()-start
@@ -38,7 +53,11 @@ def run(images,dimension):
     assert len(load_files(exported).actions)==128
     return {'seed':1307,'actions':128,'images':images,'dimensions':[dimension,dimension],
             'decoded_pixels':images*dimension*dimension,'input_bytes':sum(map(len,files.values())),
-            'load_seconds':round(load_seconds,6),'encode_only_unmasked_baseline_seconds':round(baseline_seconds,6),
+            'input_sha256':{k:hashlib.sha256(v).hexdigest() for k,v in files.items()},
+            'publication_seconds':round(publication_seconds,6),
+            'staged_logical_bytes_peak':max(staged_logical),'staged_allocated_file_bytes_peak':max(staged_allocated),
+            'total_export_logical_bytes_peak':max(total_logical),'total_export_allocated_file_bytes_peak':max(total_allocated),
+            'directory_sha256':directory_hash,'load_seconds':round(load_seconds,6),'encode_only_unmasked_baseline_seconds':round(baseline_seconds,6),
             'encode_only_unmasked_baseline_bytes':sum(map(len,baseline.values())),
             'export_and_zip_seconds':round(export_seconds,6),'replay_seconds':round(replay_seconds,6),
             'bundle_bytes':result['bytes'],'archive_bytes':len(archive),'archive_sha256':hashlib.sha256(archive).hexdigest(),
@@ -46,6 +65,7 @@ def run(images,dimension):
 
 if __name__=='__main__':
     results={'python':platform.python_version(),'platform':platform.platform(),'Pillow':importlib.metadata.version('Pillow'),
+             'disk_measurement':'Stage-boundary samples of regular-file sizes and st_blocks*512; excludes directory metadata, filesystem journal, source files and in-memory ZIP.',
              'measurement':'perf_counter wall time; Linux ru_maxrss KiB, cumulative for benchmark process; one repetition per workload',
              'baseline_scope':'PNG encoding only; excludes validation, selection, metadata, ZIP. Not a comparable end-to-end baseline.',
              'workloads':[run(64,512),run(4,2048)]}

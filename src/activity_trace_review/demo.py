@@ -1,7 +1,7 @@
 """Deterministic, wholly synthetic demonstration. No recorder or personal data."""
 import io
 from PIL import Image, ImageDraw, PngImagePlugin
-from .core import dumps, load_files, new_review, write_fresh
+from .core import dumps, load_files, new_review
 
 SECRET_RECT = [16, 16, 240, 32]
 
@@ -45,9 +45,19 @@ def create_demo(destination):
     # Parent is reserved before writing; rollback handled by CLI/tests as needed.
     path.mkdir(parents=True, mode=0o700)
     try:
-        write_fresh(files, path/'source')
+        write_sample_files(files, path/'source')
         (path/'example-review.json').write_bytes(dumps(example_review(load_files(files))))
     except BaseException:
         import shutil
         shutil.rmtree(path)
         raise
+
+
+def write_sample_files(files, destination):
+    """Test/demo source material only; never used by the redacted export path."""
+    from pathlib import Path
+    path = Path(destination)
+    path.mkdir(mode=0o700)
+    for name, data in files.items():
+        with (path/name).open('xb') as stream:
+            stream.write(data)

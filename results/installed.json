@@ -2,12 +2,29 @@
   "isolated_install": true,
   "source_tree_on_import_path": false,
   "network_connect_denied": true,
-  "package_wheel_bytes": 22579,
+  "package_wheel_bytes": 25684,
   "actions": 12,
   "images": 4,
   "bundle_bytes": 11560,
   "source_hashes_unchanged": true,
   "deterministic_replay": true,
   "unreviewed_export_rejected": true,
-  "collision_rejected": true
+  "collision_rejected": true,
+  "sigkill_recovery": true,
+  "staging_verification_rejected": true,
+  "input_sha256": {
+    "trace.json": "7d678bc7cdf797a400bf50068161ac14a7522e3f2135c413bb53cee6175f611e",
+    "screen0.png": "0fc35063e727fa3ced8cd38c3c9f1b01d80c69940380705f5c92fe032e37a402",
+    "screen1.png": "a3ae2fe160cd8219ce4b3c5814585bdc6c510d7b89e77c5b128d375382cf9563",
+    "screen3.png": "8e93dce68f6405375782f85c81b0cebc8b5866dd9a297083cf9f858401a5d697",
+    "screen2.png": "5f23f93d19749dc222a12b20aa4f3459c4ae7eb21dde75d515e5463a285634ac"
+  },
+  "bundle_sha256": {
+    "image0003.png": "01e3611488fa37844f2def245abe2a002ea94e637c0afe6589cb888a732847cc",
+    "manifest.json": "c20113dc2f34b8a75095cad06ba1e608c2653d97000549e39633c2a8c93b5e1b",
+    "trace.json": "b157b86c2f87f1ee341d1885b4b42c6893430581cdce89b3dcae92a898ca7a4b",
+    "image0001.png": "57cc79ca8a2d15a62d93c627b38c08621a8d7efd164a266778f37155a0db049e",
+    "image0004.png": "35aa890be86e6e5ad239276b0fe16abedf712f03be397340a5ad52e6961da2c9",
+    "image0002.png": "b18856fcdd4a50c905d543dc5ac88939290d61a61eefdb7b56fe9571bc3fac13"
+  }
 }

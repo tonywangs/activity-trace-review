@@ -6,8 +6,6 @@ import json
 import os
 from pathlib import Path
 import re
-import shutil
-import tempfile
 import time
 import zipfile
 from dataclasses import dataclass
@@ -158,6 +156,8 @@ def read_directory(path, budget=None):
     budget = budget or Budget()
     path = Path(path)
     require(path.is_dir() and not path.is_symlink(), 'Input must be a real directory')
+    require(not any(part.startswith('.trace-stage-') for part in (*path.absolute().parts, *path.resolve().parts)),
+            'Incomplete staging cannot be imported; retry export from the unchanged source and review')
     files, total = {}, 0
     for p in path.iterdir():
         budget.check()
@@ -267,27 +267,6 @@ def bundle_zip(files, budget=None):
     return out.getvalue()
 
 def write_fresh(files, destination, budget=None):
-    """Exclusive reservation prevents replacing even an empty existing directory."""
-    budget = budget or Budget()
-    dest = Path(destination).absolute()
-    require(not dest.exists() and not dest.is_symlink(), 'Output already exists')
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    staging = Path(tempfile.mkdtemp(prefix='.trace-stage-', dir=dest.parent))
-    reserved = False
-    try:
-        for name, data in files.items():
-            budget.check()
-            require(name in ('trace.json', 'manifest.json') or PNG.fullmatch(name), 'Invalid output filename')
-            (staging / name).write_bytes(data)
-        budget.check()
-        dest.mkdir(mode=0o700)  # atomic collision check, no overwrites
-        reserved = True
-        for p in staging.iterdir():
-            budget.check()
-            os.replace(p, dest / p.name)
-    except BaseException:
-        if reserved:
-            shutil.rmtree(dest)
-        raise
-    finally:
-        shutil.rmtree(staging)
+    """Publish a validated redacted bundle atomically without replacement."""
+    from .transaction import publish_bundle
+    return publish_bundle(files, destination, budget or Budget())

@@ -4,23 +4,27 @@ import binascii
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from importlib.resources import files as resources
 import json
+from pathlib import Path
+import re
 import secrets
 from urllib.parse import urlsplit, parse_qs
 from .core import (Invalid, LIMITS, require, loads, dumps, load_files, read_directory,
-                   new_review, validate_review, build_bundle, bundle_zip, rgb_png)
+                   new_review, validate_review, build_bundle, bundle_zip, rgb_png, write_fresh)
 from .runtime import deadline
+from .validate import validate_bundle
 
 MAX_BODY = 34*1024*1024
 
 class Workbench(HTTPServer):
-    def __init__(self, port=0, source=None):
+    def __init__(self, port=0, source=None, export_root="reviewed-exports"):
         super().__init__(('127.0.0.1', port), Handler)
+        self.export_root = Path(export_root).absolute()
         self.token = secrets.token_urlsafe(32)
         self.source = source
         self.review = new_review(source) if source else None
         self.origin = f'http://127.0.0.1:{self.server_port}'
     def snapshot(self):
-        return snapshot(self.source, self.review)
+        return {**snapshot(self.source, self.review), "export_root": str(self.export_root)}
 
 def snapshot(source, review):
     if source is None:
@@ -95,29 +99,46 @@ class Handler(BaseHTTPRequestHandler):
                         require(total <= LIMITS['input_bytes'], 'Input byte limit exceeded')
                     source = load_files(decoded)
                     review = new_review(source)
-                    payload = dumps(snapshot(source, review))
+                    payload = dumps({**snapshot(source, review), 'export_root':str(self.server.export_root)})
                     # Commit only after every file validates and response serialization succeeds.
                     self.server.source, self.server.review = source, review
                     return self.reply(200, payload)
+                if path == '/api/verify':
+                    body = loads(raw)
+                    require(type(body) is dict and set(body) == {'destination'}, 'Expected destination')
+                    name = body['destination']
+                    require(type(name) is str and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}', name), 'Invalid destination name')
+                    return self.reply(200, dumps(validate_bundle(self.server.export_root/name)))
                 require(self.server.source is not None, 'Import a trace first')
-                review = loads(raw)
+                body = loads(raw)
+                if path == '/api/export':
+                    require(type(body) is dict and set(body) == {'review', 'destination'}, 'Expected review and destination')
+                    name = body['destination']
+                    require(type(name) is str and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}', name),
+                            'Use a destination name of 1–64 letters, digits, underscores or hyphens')
+                    review = body['review']
+                else:
+                    review = body
                 validate_review(self.server.source, review, ready=path == '/api/export')
                 if path == '/api/review':
                     self.server.review = review
                     return self.reply(200, dumps({'ok':True}))
                 if path == '/api/export':
-                    payload = bundle_zip(build_bundle(self.server.source, review))
+                    files = build_bundle(self.server.source, review)
+                    payload = bundle_zip(files)
+                    self.server.export_root.mkdir(mode=0o700, exist_ok=True)
+                    write_fresh(files, self.server.export_root/name)
                     self.server.review = review
                     return self.reply(200, payload, 'application/zip')
                 self.reply(404, dumps({'error':'Not found'}))
         except (Invalid, ValueError, OSError, binascii.Error, RecursionError) as e:
-            self.reply(400, dumps({'error':str(e)[:240]}))
+            self.reply(400, dumps({'error':str(e)}))
 
 
-def serve(source_path=None, port=8765):
+def serve(source_path=None, port=8765, export_root="reviewed-exports"):
     with deadline():
         source = read_directory(source_path) if source_path else None
-    with Workbench(port, source) as server:
+    with Workbench(port, source, export_root) as server:
         print(f'Workbench: {server.origin}/#{server.token}', flush=True)
         print('Loopback only. Keep this URL private. Ctrl+C stops the server.', flush=True)
         server.serve_forever()

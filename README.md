@@ -8,7 +8,7 @@ The complete demonstration uses generated images and planted synthetic secrets. 
 
 ## Install and try it
 
-Requires Python 3.11+ on a POSIX system with interval timers (tested on Linux/Python 3.12). Package installation needs an available Pillow wheel; the application itself runs offline. Chromium is only needed for automated browser verification.
+Requires Python 3.11+ on Linux with libc `renameat2`, filesystem `RENAME_NOREPLACE` support, and file/directory fsync (tested on Linux/Python 3.12). Other platforms fail closed for export. Package installation needs an available Pillow wheel; the application itself runs offline. Chromium is only needed for automated browser verification.
 
 ```sh
 python3 -m venv .venv
@@ -24,9 +24,9 @@ If `venv` reports that `ensurepip` is missing, install your operating system's P
 3. Remove unwanted actions. Replace individual text fields, including URLs. An empty replacement keeps the field with an empty string.
 4. Drag opaque black rectangles over screenshots, or enter exact integer pixel coordinates. A mask applies to every retained action sharing that screenshot. Changing a mask clears that screenshot's review state.
 5. Explicitly review every retained screenshot and confirm the retained text and selection. Export remains disabled until those checks are complete.
-6. Save the source-bound review JSON to resume later. Export downloads a deterministic ZIP containing `trace.json`, `manifest.json`, and regenerated PNGs. Extract the ZIP into a new directory to reopen or validate it. The app never extracts arbitrary ZIP inputs.
+6. Save the source-bound review JSON to resume later. Choose a fresh export name. Export publishes a complete verified directory in the displayed server export folder, then requests a deterministic ZIP download containing `trace.json`, `manifest.json`, and regenerated PNGs. **Verify named export** checks that directory independently. Import its files to reopen it. The app never extracts arbitrary ZIP inputs.
 
-`serve` without a source opens an empty workbench. Use **Import trace files** to select `trace.json` and all referenced PNGs together. Extracted exported bundles can include their manifest. Invalid imports and review loads leave the current work unchanged. A valid source import replaces the current review; save it first. Reviews are not autosaved to disk. Refreshing requires reopening the complete server URL and can discard unsaved browser edits.
+`serve --export-root /path/to/private/exports` chooses the server export folder; the default is `reviewed-exports` in the working directory. `serve` without a source opens an empty workbench. Use **Import trace files** to select `trace.json` and all referenced PNGs together. Extracted exported bundles can include their manifest. Invalid imports and review loads leave the current work unchanged. A valid source import replaces the current review; save it first. Reviews are not autosaved to disk. Refreshing requires reopening the complete server URL and can discard unsaved browser edits.
 
 Keyboard controls (outside editable controls): ← / →, Home / End, `[` / `]` to set segment boundaries, `A` to add a segment, `D` to toggle removal, and `R` to toggle screenshot review. Ctrl/Cmd+S saves a review, including while editing a field.
 
@@ -38,11 +38,11 @@ The `demo` command also creates `example-review.json`. That specification marks 
 .venv/bin/activity-trace inspect .demo/source
 .venv/bin/activity-trace review .demo/source .demo/my-review.json
 .venv/bin/activity-trace export .demo/source .demo/example-review.json .demo/export
-.venv/bin/activity-trace validate .demo/export
+.venv/bin/activity-trace verify .demo/export
 .venv/bin/activity-trace serve .demo/export
 ```
 
-All output destinations must be fresh. A collision, including an existing empty directory, is rejected. Source files are read without alteration. `inspect` reports SHA-256 hashes of the exact input trace and referenced image bytes. Keep source files and review specifications private. Only share an export after checking it.
+The destination parent must already exist. All output destinations must be fresh. A collision, including an existing empty directory, is rejected. Source files are read without alteration. `inspect` reports SHA-256 hashes of the exact input trace and referenced image bytes. Keep source files and review specifications private. Only share an export after checking it. `verify` (`validate` is an alias) establishes internal integrity, not authenticity or adequate redaction.
 
 ## Verification
 
@@ -60,9 +60,9 @@ Then run the complete verification offline with one command:
 .venv/bin/python scripts/verify.py
 ```
 
-The command requires GNU `/usr/bin/time` for measured peak RSS. It runs the core tests, **240 seeded independent export cases**, a real Chromium workflow with non-workbench browser requests blocked, an isolated wheel-installed CLI example with Python network connection/DNS APIs denied, and two bounded performance workloads. It checks deterministic replay and source hashes. It updates [measured results](results/verification.json), [browser evidence](results/browser.json), [benchmarks](results/benchmark.json), and [plain test output](results/tests.log). `TRACE_WHEELHOUSE` and `PLAYWRIGHT_BROWSERS_PATH` override the caches. Offline verification cannot bootstrap absent dependencies.
+The command requires GNU `/usr/bin/time` for measured peak RSS. It runs the core tests, **240 seeded independent export cases**, a real Chromium workflow with non-workbench browser requests blocked, an isolated wheel-installed CLI example with Python network connection/DNS APIs denied, and two bounded performance workloads. It checks deterministic replay, source hashes, SIGKILL at eight publication stages, competing writers, partial writes, fsync failures, staging rejection, and browser/installed-CLI recovery. It updates [measured results](results/verification.json), [browser evidence](results/browser.json), [benchmarks](results/benchmark.json), and [plain test output](results/tests.log). `TRACE_WHEELHOUSE` and `PLAYWRIGHT_BROWSERS_PATH` override the caches. Offline verification cannot bootstrap absent dependencies.
 
-See [format and review semantics](docs/format.md), [validation scope and limitations](docs/validation.md), and [related work](docs/related-work.md).
+See [transaction guarantees and recovery](docs/transactions.md), [format and review semantics](docs/format.md), [validation scope and limitations](docs/validation.md), and [related work](docs/related-work.md).
 
 ## Limits that matter
 
@@ -70,6 +70,6 @@ Manual review **cannot guarantee de-identification**. Retained text, timestamps,
 
 Input is bounded to 128 actions, 64 PNGs, 24 MiB, 2,048 pixels per image side, and 16,777,216 total decoded pixels. JSON is limited to 512 KiB. Each CLI operation or API request has a 10-second POSIX timer; core loops also check cancellation and time. Detailed bounds are in the format document. Extremely slow machines or incompressible images can hit a limit before reaching the maximum action count.
 
-The server is a single-user local tool, not a hardened shared service. Anyone controlling the local machine or possessing the token can access the loaded trace. Review files and downloads are ordinary files with no encryption. Browser export cancellation prevents the download; already submitted bounded server work may finish. Imports cannot be cancelled once submitted for their atomic validation/commit. Ctrl+C cancels CLI work and cleans a partially written destination during ordinary exception handling; forced termination or power loss may leave a partial directory.
+The server is a single-user local tool, not a hardened shared service. Anyone controlling the local machine or possessing the token can access the loaded trace. Review files and downloads are ordinary files with no encryption. Browser export cancellation prevents the download request in the UI; already submitted server work may publish. Verify the named destination before retrying. Imports cannot be cancelled once submitted for their atomic validation/commit. An interrupted export leaves the destination absent or complete on the supported filesystem; incomplete `.trace-stage-*` siblings may remain. Preserve the review, verify the destination, and retry into a fresh name if needed. Inspect and manually remove only owned inactive staging. No power-loss guarantee is claimed.
 
 Synthetic fixtures do not establish compatibility with any activity recorder. Human usability, screen-reader usability, other browsers, macOS, Windows, adversarial native image decoders, and downstream model training have not been validated. No novelty claim, automatic secret detection, medical claim, or training-quality claim is made.

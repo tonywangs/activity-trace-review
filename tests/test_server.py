@@ -3,16 +3,18 @@ from concurrent.futures import ThreadPoolExecutor
 import http.client
 import json
 import unittest
+import tempfile
+from pathlib import Path
 from unittest.mock import patch
 from activity_trace_review import core, server
 from activity_trace_review.demo import demo_files, example_review
 
 class ServerTransactions(unittest.TestCase):
-    def post(self, instance, body, token=None):
+    def post(self, instance, body, token=None, path="/api/import"):
         def request():
             connection=http.client.HTTPConnection('127.0.0.1',instance.server_port,timeout=5)
             try:
-                connection.request('POST','/api/import',body=body,
+                connection.request('POST',path,body=body,
                                    headers={'Content-Type':'application/json','X-Review-Token':instance.token if token is None else token})
                 response=connection.getresponse()
                 return response.status,json.loads(response.read())
@@ -37,6 +39,19 @@ class ServerTransactions(unittest.TestCase):
                 status,data=self.post(instance,body)
             self.assertEqual(status,400);self.assertIn('serialization',data['error'])
             self.assertIs(instance.source,source);self.assertIs(instance.review,review)
+
+    def test_failed_export_preserves_server_review_and_recovery(self):
+        source=core.load_files(demo_files())
+        with tempfile.TemporaryDirectory() as tmp, server.Workbench(source=source,export_root=tmp) as instance:
+            original=instance.review
+            candidate=example_review(source)
+            body=json.dumps({'review':candidate,'destination':'out'})
+            with patch.object(server,'write_fresh',side_effect=OSError('injected publication failure')):
+                status,result=self.post(instance,body,path='/api/export')
+            self.assertEqual(status,400);self.assertIn('publication failure',result['error'])
+            self.assertIs(instance.review,original)
+            self.assertEqual(list(Path(tmp).iterdir()),[])
+            self.assertEqual(candidate,example_review(source))
 
     def test_non_ascii_auth_rejected_without_state_change(self):
         with server.Workbench() as instance:

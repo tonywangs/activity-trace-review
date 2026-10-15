@@ -77,6 +77,7 @@ async function show(){
   catch(e){if(version===imageVersion)message(e.message,true);}
 }
 function mount(snapshot){
+  $('exportLocation').textContent=`Server export folder: ${snapshot.export_root || 'see server configuration'}. Choose a fresh name; use Verify named export after an interrupted response.`;
   state=snapshot;current=0;review=snapshot.source?safeReview(clone(snapshot.review)):null;$('workbench').hidden=!snapshot.source;
   if(!snapshot.source)return;
   $('sourceBadge').textContent=snapshot.trace.synthetic?'SYNTHETIC INPUT':'NON-SYNTHETIC INPUT';
@@ -115,7 +116,7 @@ async function operation(fn, cancellable=true){
   busy=true;controller=new AbortController();const controls=[...document.querySelectorAll('button,input,select,textarea')].filter(el=>el.id!=='cancel');
   const disabled=controls.map(el=>el.disabled);controls.forEach(el=>el.disabled=true);$('cancel').disabled=!cancellable;
   try{await fn(controller.signal);}
-  catch(e){message(e.name==='AbortError'?'Operation cancelled; no download was saved.':e.message,true);}
+  catch(e){message(e.name==='AbortError'?'Operation cancelled. Publication may already have succeeded; verify the named destination before retrying. Your review is preserved.':e.message,true);}
   finally{controls.forEach((el,i)=>el.disabled=disabled[i]);busy=false;controller=null;$('cancel').disabled=true;summary();}
 }
 $('cancel').onclick=()=>controller?.abort();
@@ -131,7 +132,24 @@ $('loadReview').onchange=()=>{const file=$('loadReview').files[0];if(!file)retur
   const candidate=JSON.parse(await file.text());await api('/api/review',candidate);review=safeReview(candidate);renderSegments();await show();message('Source-bound review loaded.');
 },false);$('loadReview').value='';};
 $('saveReview').onclick=()=>operation(async()=>{const snapshot=clone(review);await api('/api/review',snapshot);download(JSON.stringify(snapshot,null,2)+'\n','review.json','application/json');message('Review saved. Keep it private and retain the unchanged source files.');},false);
-$('export').onclick=()=>operation(async signal=>{const response=await api('/api/export',clone(review),signal);const blob=await response.blob();signal.throwIfAborted();download(blob,'reviewed-bundle.zip','application/zip');message('Bundle exported. Manual review cannot guarantee de-identification.');});
+$('verifyExport').onclick=()=>operation(async()=>{
+  const result=await (await api('/api/verify',{destination:$('destination').value})).json();
+  message(`Integrity verified: ${result.actions} actions, ${result.images} images. This does not prove adequate redaction or authenticity.`);
+},false);
+$('export').onclick=()=>operation(async signal=>{
+  const destination=$('destination').value;
+  if(!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(destination))throw new Error('Choose a simple export name: letters, digits, underscores or hyphens (1–64 characters).');
+  message(`Publishing ${destination}…`);
+  try{
+    const response=await api('/api/export',{review:clone(review),destination},signal);
+    const blob=await response.blob();signal.throwIfAborted();
+    download(blob,`${destination}.zip`,'application/zip');
+    message(`Published ${destination} in the server export folder. ZIP download requested. Manual review cannot guarantee de-identification.`);
+  }catch(e){
+    if(e.name==='AbortError')throw e;
+    throw new Error(`${e.message}. Verify ${destination} in the server export folder before retrying with a fresh name. Your review is preserved; save it before closing.`);
+  }
+});
 document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();if(state?.source&&!busy)$('saveReview').click();return;}
   if(busy||!state?.source||e.altKey||e.ctrlKey||e.metaKey||['INPUT','TEXTAREA','SELECT','BUTTON'].includes(e.target.tagName))return;

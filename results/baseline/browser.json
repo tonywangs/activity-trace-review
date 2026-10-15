@@ -1,0 +1,17 @@
+{
+  "chromium": "140.0.7339.16",
+  "elapsed_seconds": 10.208,
+  "dom_elements": 144,
+  "timeline_buttons": 12,
+  "maximum_workload_dom_elements": 602,
+  "maximum_workload_timeline_buttons": 128,
+  "server_peak_rss_kib": 96672,
+  "canvas_elements": 1,
+  "export_zip_bytes": 5973,
+  "export_bundle_bytes": 5549,
+  "deterministic_replay": true,
+  "external_requests_attempted": 0,
+  "external_request_policy": "abort non-loopback-workbench requests",
+  "browser_errors": [],
+  "workflow": "import, navigation, keyboard editing, segments, removal, text, drag masks, shared review, save/reload, invalid imports, cancellation, export, independent pixel validation, reopen"
+}

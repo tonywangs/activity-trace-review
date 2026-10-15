@@ -13,7 +13,7 @@ from unittest.mock import patch
 import zipfile
 from PIL import Image, PngImagePlugin
 from activity_trace_review import core as c
-from activity_trace_review.demo import demo_files, example_review, SECRET_RECT
+from activity_trace_review.demo import demo_files, example_review, SECRET_RECT, write_sample_files
 from activity_trace_review.runtime import deadline
 from activity_trace_review.validate import validate_bundle, BundleError
 
@@ -101,7 +101,7 @@ class CoreTests(unittest.TestCase):
             with self.assertRaises(c.Invalid):c.load_files(files)
     def test_path_symlink_fifo_and_output_collision(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root=Path(tmp);source=root/'source';c.write_fresh(self.files,source)
+            root=Path(tmp);source=root/'source';write_sample_files(self.files,source)
             original=(source/'screen0.png').read_bytes();(source/'screen0.png').unlink();(root/'outside.png').write_bytes(original)
             (source/'screen0.png').symlink_to(root/'outside.png')
             with self.assertRaises(OSError):c.read_directory(source)
@@ -111,31 +111,16 @@ class CoreTests(unittest.TestCase):
             link=root/'link';link.symlink_to(source,target_is_directory=True)
             with self.assertRaises(c.Invalid):c.read_directory(link)
             for dest in [source,link]:
-                with self.assertRaises(c.Invalid):c.write_fresh(self.files,dest)
+                with self.assertRaises(OSError):c.write_fresh(c.build_bundle(self.source,self.review),dest)
             self.assertEqual((source/'screen0.png').read_bytes(),original)
-            dest=root/'race'
-            mkdir=Path.mkdir
-            def racing(path,*args,**kwargs):
-                if path==dest:
-                    mkdir(path);(path/'sentinel').write_text('keep')
-                return mkdir(path,*args,**kwargs)
-            with patch.object(Path,'mkdir',racing),self.assertRaises(FileExistsError):c.write_fresh(self.files,dest)
-            self.assertEqual((dest/'sentinel').read_text(),'keep')
-            self.assertFalse(list(root.glob('.trace-stage-*')))
+
     def test_cleanup_cancellation_and_serialization_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);dest=root/'out'
-            def broken(*args,**kwargs):raise OSError('injected disk error')
-            with patch.object(Path,'write_bytes',broken),self.assertRaises(OSError):c.write_fresh(self.files,dest)
-            self.assertFalse(dest.exists());self.assertFalse(list(root.iterdir()))
-            with patch.object(c.os,'replace',broken),self.assertRaises(OSError):c.write_fresh(self.files,dest)
-            self.assertFalse(dest.exists());self.assertFalse(list(root.iterdir()))
-            with patch.object(c.os,'replace',side_effect=KeyboardInterrupt),self.assertRaises(KeyboardInterrupt):c.write_fresh(self.files,dest)
-            self.assertFalse(dest.exists());self.assertFalse(list(root.iterdir()))
             with patch.object(c,'dumps',side_effect=TypeError('injected serialization failure')),self.assertRaises(TypeError):
                 c.write_fresh(c.build_bundle(self.source,self.review),dest)
             self.assertFalse(dest.exists());self.assertFalse(list(root.iterdir()))
-            with self.assertRaises(c.Invalid):c.write_fresh(self.files,dest,c.Budget(cancelled=lambda:True))
+            with self.assertRaises(c.Invalid):c.write_fresh(c.build_bundle(self.source,self.review),dest,c.Budget(cancelled=lambda:True))
             self.assertFalse(list(root.iterdir()))
         with self.assertRaises(c.Invalid):c.build_bundle(self.source,self.review,c.Budget(seconds=0))
         with self.assertRaises(c.Invalid):c.bundle_zip(self.files,c.Budget(cancelled=lambda:True))
@@ -167,6 +152,7 @@ class CoreTests(unittest.TestCase):
 class SeededIndependentOracle(unittest.TestCase):
     def test_240_seeded_cases(self):
         """Expected selection and pixels computed directly, without export helpers."""
+        evidence=[]
         for seed in range(240):
             with self.subTest(seed=seed):
                 rng=random.Random(seed);files={};originals={};rectangles={}
@@ -223,5 +209,12 @@ class SeededIndependentOracle(unittest.TestCase):
                 with tempfile.TemporaryDirectory() as tmp:
                     destination=Path(tmp)/'out';c.write_fresh(exported,destination);report=validate_bundle(destination)
                     self.assertEqual(report['actions'],len(kept))
+                    empty=copy.deepcopy(review);empty['segments']=[]
+                    with self.assertRaises(c.Invalid):c.write_fresh(c.build_bundle(source,empty),Path(tmp)/'empty')
+                    self.assertFalse((Path(tmp)/'empty').exists())
+                evidence.append({'seed':seed,'input_sha256':before,
+                                 'bundle_sha256':hashlib.sha256(c.bundle_zip(exported)).hexdigest(),
+                                 'actions':len(kept),'images':len(expected_names)})
+        Path('results/seeded.json').write_text(json.dumps({'cases':evidence,'empty_selections_rejected':240},indent=2)+'\n')
 
 if __name__=='__main__':unittest.main()

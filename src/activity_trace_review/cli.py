@@ -18,21 +18,21 @@ def main(argv=None):
     rev.add_argument('source'); rev.add_argument('destination')
     exp = sub.add_parser('export', help='export a reviewed source to a fresh directory')
     exp.add_argument('source'); exp.add_argument('review'); exp.add_argument('destination')
-    val = sub.add_parser('validate', help='independently validate exported bundle integrity')
+    val = sub.add_parser('verify', aliases=['validate'], help='independently validate exported bundle integrity')
     val.add_argument('bundle')
     srv = sub.add_parser('serve', help='open loopback-only workbench; Ctrl+C stops and discards memory')
-    srv.add_argument('source', nargs='?'); srv.add_argument('--port', type=int, default=8765)
+    srv.add_argument('--export-root', default='reviewed-exports'); srv.add_argument('source', nargs='?'); srv.add_argument('--port', type=int, default=8765)
     args = p.parse_args(argv)
     try:
         if args.command == 'serve':
             from .server import serve
-            serve(args.source, args.port)
+            serve(args.source, args.port, args.export_root)
             return 0
         with deadline():
             if args.command == 'demo':
                 create_demo(args.destination)
                 print('Created synthetic demo. example-review.json is for this planted fixture only.')
-            elif args.command == 'validate':
+            elif args.command in ('verify', 'validate'):
                 print(json.dumps(validate_bundle(args.bundle), sort_keys=True))
             else:
                 source = read_directory(args.source)

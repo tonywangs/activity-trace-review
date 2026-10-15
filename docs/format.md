@@ -95,4 +95,15 @@ Output JSON and each reencoded image must also meet the corresponding input limi
 
 The POSIX timer bounds request reads and processing with Python exception delivery. C extension code can defer Python signal handling until it returns; dimensions and encoded-byte limits also bound native decode/encode work. This is not a kernel CPU/memory sandbox or a precise preemption guarantee for hostile native decoder code. Direct library calls use cooperative budget checks; the CLI and HTTP server add the timer.
 
-CLI directory output is staged in a private sibling directory, reserves a fresh destination exclusively, then moves files into it. Collision, cancellation, serialization failure before staging, and injected write/move failures are tested. Handled failures remove the destination owned by that operation and its staging directory. Publication is not crash-atomic; forced process termination can leave staged or partial files. Existing destinations are never overwritten. No success is printed before completion.
+CLI and browser directory output is staged privately, independently validated, and published by one no-replace directory rename. Existing destinations are never overwritten. Failures retain clearly marked staging and preserve any already published destination; they do not recursively delete paths. No completion is reported before publication and parent fsync succeed. See the transaction contract below for interruption, recovery, platform restrictions, and power-loss limits.
+
+
+## Publication and integrity
+
+The `activity-bundle/1` schema is unchanged. Complete exports are published by an
+atomic no-replace directory rename after independent reread validation. Run
+`activity-trace verify DIRECTORY` (`validate` remains an alias) to check a bundle.
+The validator checks schema, inventory, hashes, ordered actions/references,
+image dimensions, PNG CRC/layout, and complete RGB decoding. It does not certify
+redaction quality or authenticity. `.trace-stage-*` directories and their
+payloads are incomplete and rejected. See [transaction guarantees and recovery](transactions.md).

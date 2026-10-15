@@ -13,7 +13,7 @@ import zipfile
 from PIL import Image
 from playwright.sync_api import sync_playwright, expect
 from activity_trace_review.core import dumps, write_fresh
-from activity_trace_review.demo import demo_files
+from activity_trace_review.demo import demo_files, write_sample_files
 from activity_trace_review.validate import validate_bundle
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -24,14 +24,14 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         tmp=Path(tmp);source=tmp/'source';files=demo_files()
         trace=json.loads(files['trace.json']);trace['actions'][0]['text']['label']='<img src="https://never-fetch.invalid/pwn" onerror="window.pwned=1">'
-        files['trace.json']=dumps(trace);write_fresh(files,source)
+        files['trace.json']=dumps(trace);write_sample_files(files,source)
         hashes={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in source.iterdir()}
         rss_file=tmp/'server-rss.json'
         runner=('import atexit,json,resource,signal,sys;from pathlib import Path;'
                 'from activity_trace_review.cli import main;'
                 'atexit.register(lambda:Path(sys.argv[1]).write_text(json.dumps(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)));'
-                'signal.signal(signal.SIGTERM,lambda *_:sys.exit(0));main(["serve","--port","0"])')
-        server=subprocess.Popen([sys.executable,'-c',runner,str(rss_file)],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+                'signal.signal(signal.SIGTERM,lambda *_:sys.exit(0));main(["serve","--port","0","--export-root",sys.argv[2]])')
+        server=subprocess.Popen([sys.executable,'-c',runner,str(rss_file),str(tmp/'published')],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
         try:
             line=server.stdout.readline().strip();assert line.startswith('Workbench:'),line
             url=line.split(' ',1)[1];origin=url.split('/#')[0];token=url.split('#')[1]
@@ -110,11 +110,44 @@ def main():
                 for pending in held:pending.abort()
                 page.unroute('**/api/export')
                 expect(page.locator('#export')).to_be_enabled()
+                # Lose the response after the server has published. The UI must
+                # report uncertainty, retain edits, and reconcile using Verify.
+                page.locator('#destination').fill('lost-response')
+                def lose_response(route):
+                    response=route.fetch();assert response.status==200
+                    route.abort()
+                page.route('**/api/export',lose_response)
+                page.locator('#export').click()
+                expect(page.locator('#status')).to_contain_text('Your review is preserved')
+                expect(page.locator('#status')).to_have_class('error')
+                expect(page.locator('#confirmed')).to_be_checked()
+                assert validate_bundle(tmp/'published'/'lost-response')['actions']==4
+                page.unroute('**/api/export')
+                page.locator('#verifyExport').click()
+                expect(page.locator('#status')).to_contain_text('Integrity verified: 4 actions, 2 images')
                 archives=[]
                 for n in range(2):
+                    page.locator('#destination').fill(f'bundle{n}')
                     with page.expect_download() as got:page.locator('#export').click()
                     archive=tmp/f'bundle{n}.zip';got.value.save_as(archive);archives.append(archive.read_bytes())
+                expect(page.locator('#status')).to_contain_text('Published bundle1')
                 assert archives[0]==archives[1]
+                for n in range(2):assert validate_bundle(tmp/'published'/f'bundle{n}')['actions']==4
+                # Existing destination is a real publication failure, not a mocked response.
+                before_publish={p.name:p.read_bytes() for p in (tmp/'published'/'bundle1').iterdir()}
+                page.locator('#export').click()
+                expect(page.locator('#status')).to_contain_text('Your review is preserved')
+                expect(page.locator('#status')).to_have_class('error')
+                expect(page.locator('#counts')).to_have_text('4/12')
+                expect(page.locator('#confirmed')).to_be_checked()
+                assert before_publish=={p.name:p.read_bytes() for p in (tmp/'published'/'bundle1').iterdir()}
+                page.locator('#destination').fill('recovered')
+                with page.expect_download() as recovered:page.locator('#export').click()
+                recovered.value.save_as(tmp/'recovered.zip')
+                expect(page.locator('#status')).to_contain_text('Published recovered')
+                assert validate_bundle(tmp/'published'/'recovered')['actions']==4
+                page.locator('#verifyExport').click()
+                expect(page.locator('#status')).to_contain_text('Integrity verified: 4 actions, 2 images')
                 bundle=tmp/'bundle';bundle.mkdir()
                 with zipfile.ZipFile(io.BytesIO(archives[0])) as z:
                     assert set(z.namelist())=={'trace.json','manifest.json','image0001.png','image0002.png'}
@@ -138,7 +171,7 @@ def main():
                 from workloads import workload
                 large=tmp/'large';large_files=workload();large_trace=json.loads(large_files['trace.json'])
                 large_trace['actions'][0]['id']='__proto__';large_trace['actions'][-1]['id']='constructor'
-                large_files['trace.json']=dumps(large_trace);write_fresh(large_files,large)
+                large_files['trace.json']=dumps(large_trace);write_sample_files(large_files,large)
                 page.locator('#import').set_input_files([str(p) for p in sorted(large.iterdir())])
                 expect(page.locator('#position')).to_have_text('1 / 128')
                 expect(page.locator('#timeline .action')).to_have_count(128)
@@ -164,7 +197,7 @@ def main():
                 report={'chromium':browser.version,'elapsed_seconds':round(time.perf_counter()-started,3),'dom_elements':dom_count,
                         'timeline_buttons':12,'maximum_workload_dom_elements':maximum_dom,'maximum_workload_timeline_buttons':128,'server_peak_rss_kib':server_hwm,'canvas_elements':1,'export_zip_bytes':len(archives[0]),'export_bundle_bytes':info['bytes'],
                         'deterministic_replay':True,'external_requests_attempted':len(external),'external_request_policy':'abort non-loopback-workbench requests',
-                        'browser_errors':errors,'workflow':'import, navigation, keyboard editing, segments, removal, text, drag masks, shared review, save/reload, invalid imports, cancellation, export, independent pixel validation, reopen'}
+                        'browser_errors':errors,'publication_collision_recovery':True,'lost_response_reconciled':True,'published_directories_verified':4,'workflow':'import, navigation, keyboard editing, segments, removal, text, drag masks, shared review, save/reload, invalid imports, cancellation, export, independent pixel validation, reopen'}
                 browser.close()
                 print(json.dumps(report,sort_keys=True));(ROOT/'results/browser.json').write_text(json.dumps(report,indent=2)+'\n')
         finally:
