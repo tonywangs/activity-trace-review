@@ -13,7 +13,7 @@ ROOT=Path(__file__).resolve().parents[1]
 def main():
     os.chdir(ROOT);(ROOT/'results').mkdir(exist_ok=True)
     os.environ.setdefault('PLAYWRIGHT_BROWSERS_PATH','/tmp/activity-trace-browsers')
-    commands=[['-m','unittest','discover','-s','tests','-v'],['tests/browser_flow.py'],
+    commands=[['-m','unittest','discover','-s','tests','-v'],['tests/browser_flow.py'],['tests/capture_flow.py'],
               ['scripts/installed_example.py'],['scripts/benchmark.py'],['scripts/publication_check.py']]
     reports=[];output=[];started=time.perf_counter()
     for args in commands:

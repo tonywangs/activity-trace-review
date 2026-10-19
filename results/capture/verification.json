@@ -1,0 +1,27 @@
+{
+  "browser": "140.0.7339.16",
+  "automated_participant": true,
+  "input": "Public NASA Earth/Sun facts in bundled offline task page",
+  "captured_actions": 5,
+  "exported_actions": 3,
+  "explicit_opt_in_checked": true,
+  "before_start_and_after_stop_excluded": true,
+  "pending_capture_discarded_on_stop": true,
+  "action_limit_checked": 16,
+  "untrusted_dom_events_ignored": true,
+  "all_export_pixels_checked": 1134000,
+  "timer_limit_checked_with_browser_clock": true,
+  "backend_time_guard_checked": true,
+  "stop_control_visible_after_scroll": true,
+  "external_requests_attempted": [],
+  "browser_errors": [],
+  "excluded_text": [
+    "TEST_ONLY_EXCLUDE_71d2",
+    "TEST_ONLY_BEFORE_START",
+    "TEST_ONLY_AFTER_STOP"
+  ],
+  "limitations": [
+    "Automated browser participant, not a human usability study.",
+    "Only bundled panel buttons and committed notes are recorded."
+  ]
+}

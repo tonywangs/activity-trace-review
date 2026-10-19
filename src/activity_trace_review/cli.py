@@ -22,8 +22,15 @@ def main(argv=None):
     val.add_argument('bundle')
     srv = sub.add_parser('serve', help='open loopback-only workbench; Ctrl+C stops and discards memory')
     srv.add_argument('--export-root', default='reviewed-exports'); srv.add_argument('source', nargs='?'); srv.add_argument('--port', type=int, default=8765)
+    rec = sub.add_parser('record', help='launch opt-in recording of the bounded local Chromium task page')
+    rec.add_argument('destination', help='fresh private raw-capture directory')
+    rec.add_argument('--export-root', default='reviewed-exports')
     args = p.parse_args(argv)
     try:
+        if args.command == 'record':
+            from .recorder import record
+            record(args.destination, args.export_root)
+            return 0
         if args.command == 'serve':
             from .server import serve
             serve(args.source, args.port, args.export_root)

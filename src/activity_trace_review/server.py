@@ -1,4 +1,4 @@
-"""Single-user loopback server. No outbound HTTP, recorder, telemetry, or URL execution."""
+"""Single-user loopback server. No outbound HTTP, telemetry, or URL execution. Recorder assets are inert without the capture CLI."""
 import base64
 import binascii
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -61,9 +61,9 @@ class Handler(BaseHTTPRequestHandler):
             with deadline():
                 self.check_host()
                 path = urlsplit(self.path).path
-                if path in ('/', '/app.js', '/style.css'):
-                    name = {'/':'index.html','/app.js':'app.js','/style.css':'style.css'}[path]
-                    mime = {'/':'text/html; charset=utf-8','/app.js':'text/javascript; charset=utf-8','/style.css':'text/css; charset=utf-8'}[path]
+                if path in ('/', '/app.js', '/style.css', '/session.html', '/session.js', '/session.css'):
+                    name = 'index.html' if path == '/' else path[1:]
+                    mime = {'html':'text/html; charset=utf-8','js':'text/javascript; charset=utf-8','css':'text/css; charset=utf-8'}[name.rsplit('.', 1)[1]]
                     return self.reply(200, resources('activity_trace_review').joinpath('web',name).read_bytes(), mime)
                 self.authorize()
                 if path == '/api/state':
